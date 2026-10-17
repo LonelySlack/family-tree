@@ -1,12 +1,15 @@
-from flask import Flask, render_template, request, jsonify
+from datetime import date
+
+from flask import Flask, render_template, request, jsonify, send_file
 import database
+import export
 
 app = Flask(__name__)
 
 # Initialize database
 database.init_db()
 
-FIELDS = ['name', 'gender', 'birth_date', 'death_date', 'is_deceased',
+FIELDS = ['name', 'nickname', 'gender', 'birth_date', 'death_date', 'is_deceased',
           'father_id', 'mother_id', 'spouse_id', 'notes']
 
 
@@ -25,6 +28,7 @@ def clean(data, member_id=None):
 
     values = {
         'name': text('name'),
+        'nickname': text('nickname'),
         'gender': text('gender'),
         'birth_date': text('birth_date'),
         'death_date': text('death_date'),
@@ -64,6 +68,18 @@ def get_members():
     members = conn.execute('SELECT * FROM members').fetchall()
     conn.close()
     return jsonify([dict(m) for m in members])
+
+@app.route('/api/export.xlsx')
+def export_xlsx():
+    conn = database.get_connection()
+    members = [dict(m) for m in conn.execute('SELECT * FROM members')]
+    conn.close()
+    return send_file(
+        export.to_xlsx(members),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'family-tree-{date.today():%Y-%m-%d}.xlsx',
+    )
 
 @app.route('/api/members', methods=['POST'])
 def add_member():

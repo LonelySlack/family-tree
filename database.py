@@ -5,6 +5,13 @@ import os
 # however it's started.
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'family_tree.db')
 
+# Columns added after the table was first created. init_db adds any that are
+# missing, so an old database and a fresh install end up with the same schema.
+ADDED_COLUMNS = {
+    'is_deceased': 'INTEGER DEFAULT 0',
+    'nickname': 'TEXT',
+}
+
 def get_connection():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
@@ -29,6 +36,10 @@ def init_db():
             FOREIGN KEY(spouse_id) REFERENCES members(id)
         )
     ''')
+    existing = {row['name'] for row in c.execute('PRAGMA table_info(members)')}
+    for column, definition in ADDED_COLUMNS.items():
+        if column not in existing:
+            c.execute(f'ALTER TABLE members ADD COLUMN {column} {definition}')
     conn.commit()
     conn.close()
 

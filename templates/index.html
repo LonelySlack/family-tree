@@ -4,42 +4,92 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family Tree</title>
+    <script>
+        // Set the theme before anything paints, so dark mode doesn't flash white.
+        (function () {
+            let theme = null;
+            try { theme = localStorage.getItem('ft-theme'); } catch (e) {}
+            if (theme !== 'light' && theme !== 'dark') {
+                theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
     <!-- Served locally so the tree still loads when the internet is down. -->
     <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="/static/vendor/vis-network.min.js"></script>
 </head>
 <body>
-    <nav class="navbar navbar-dark bg-primary">
-        <div class="container-fluid">
-            <span class="navbar-brand">Family Tree <small class="opacity-75" id="memberCount"></small></span>
-            <button class="btn btn-light ms-auto" onclick="openAddModal()">+ Add Member</button>
+    <nav class="navbar app-bar px-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <span class="navbar-brand mb-0 h1">🌳 Family Tree</span>
+            <div class="stats" id="stats"></div>
+        </div>
+        <div class="d-flex align-items-center gap-2 ms-auto">
+            <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Add member</button>
+
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">View</button>
+                <div class="dropdown-menu dropdown-menu-end p-2 view-menu">
+                    <h6 class="dropdown-header px-1">Tree direction</h6>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="direction" id="dirDown" value="down" onchange="setSetting('direction', 'down')">
+                        <label class="btn btn-outline-secondary btn-sm" for="dirDown">↓ Top to bottom</label>
+                        <input type="radio" class="btn-check" name="direction" id="dirRight" value="right" onchange="setSetting('direction', 'right')">
+                        <label class="btn btn-outline-secondary btn-sm" for="dirRight">→ Left to right</label>
+                    </div>
+                    <h6 class="dropdown-header px-1">Boxes</h6>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="optCompact" onchange="setSetting('compact', this.checked)">
+                        <label class="form-check-label" for="optCompact">Compact (names only)</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="optNicknames" onchange="setSetting('nicknames', this.checked)">
+                        <label class="form-check-label" for="optNicknames">Show nicknames</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="optColour" onchange="setSetting('colourByGender', this.checked)">
+                        <label class="form-check-label" for="optColour">Colour by gender</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">Export</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" onclick="exportPng(); return false;">🖼️ Tree as PNG image</a></li>
+                    <li><a class="dropdown-item" href="/api/export.xlsx">📊 Excel spreadsheet (.xlsx)</a></li>
+                </ul>
+            </div>
+
+            <button class="btn btn-outline-secondary btn-sm theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch light/dark mode"></button>
         </div>
     </nav>
 
-    <div class="container-fluid mt-3">
+    <main class="container-fluid py-3">
         <div class="row g-3">
-            <div class="col-md-3">
-                <div class="card">
+            <div class="col-lg-3 col-md-4">
+                <div class="card h-100">
                     <div class="card-header">
                         <input type="search" class="form-control form-control-sm" id="search"
-                               placeholder="Search members…" oninput="renderMembersList()">
+                               placeholder="Search by name or nickname…" oninput="renderMembersList()">
                     </div>
                     <ul class="list-group list-group-flush" id="membersList"></ul>
                 </div>
             </div>
-            <div class="col-md-9">
+            <div class="col-lg-9 col-md-8">
                 <div class="card">
                     <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
-                        <div class="legend small">
+                        <div class="legend small" id="legend">
                             <span><i class="line child"></i>Child of</span>
-                            <span><i class="swatch male"></i>Male</span>
-                            <span><i class="swatch female"></i>Female</span>
                             <span><i class="line spouse"></i>Spouse</span>
+                            <span class="gender-key"><i class="swatch male"></i>Male</span>
+                            <span class="gender-key"><i class="swatch female"></i>Female</span>
                             <span><i class="swatch deceased"></i>Meninggal Dunia</span>
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <span class="small text-muted d-none d-lg-inline">Click a person for details · double-click to edit</span>
+                            <span class="small text-body-secondary d-none d-xl-inline">Click for details · double-click to edit</span>
                             <button class="btn btn-sm btn-outline-secondary" onclick="fitTree()">Fit to screen</button>
                         </div>
                     </div>
@@ -49,11 +99,23 @@
                 </div>
             </div>
         </div>
+    </main>
+
+    <!-- Person details: opens beside the tree when you click someone. -->
+    <div class="offcanvas offcanvas-end" data-bs-scroll="true" data-bs-backdrop="false" tabindex="-1" id="detailsPanel">
+        <div class="offcanvas-header pb-2">
+            <div>
+                <h5 class="offcanvas-title mb-0" id="detailsName"></h5>
+                <div class="text-body-secondary" id="detailsNickname"></div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body pt-0" id="detailsBody"></div>
     </div>
 
     <!-- Modal for Add/Edit -->
     <div class="modal fade" id="memberModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalTitle">Add Member</h5>
@@ -63,9 +125,15 @@
                     <div class="alert alert-danger py-2 d-none" id="formError"></div>
                     <form id="memberForm" onsubmit="event.preventDefault(); saveMember();">
                         <input type="hidden" id="memberId">
-                        <div class="mb-3">
-                            <label class="form-label">Name</label>
-                            <input type="text" class="form-control" id="name" required>
+                        <div class="row">
+                            <div class="col-sm-7 mb-3">
+                                <label class="form-label">Name</label>
+                                <input type="text" class="form-control" id="name" required>
+                            </div>
+                            <div class="col-sm-5 mb-3">
+                                <label class="form-label">Nickname</label>
+                                <input type="text" class="form-control" id="nickname" placeholder="e.g. Pak Long">
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Gender</label>
@@ -110,7 +178,7 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-danger me-auto" id="deleteBtn" style="display:none;" onclick="deleteMember()">Delete</button>
+                    <button type="button" class="btn btn-outline-danger me-auto" id="deleteBtn" style="display:none;" onclick="deleteMember()">Delete</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="button" class="btn btn-primary" onclick="saveMember()">Save</button>
                 </div>
@@ -118,7 +186,17 @@
         </div>
     </div>
 
+    <div class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3">
+        <div class="toast align-items-center border-0" id="toast" role="status">
+            <div class="d-flex">
+                <div class="toast-body" id="toastBody"></div>
+                <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/vendor/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/layout.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

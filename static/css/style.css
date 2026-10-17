@@ -1,13 +1,86 @@
+/* Colours that change with the theme. The tree canvas reads its own palette
+   from app.js; these cover the page around it. */
+:root,
+[data-bs-theme="light"] {
+    --ft-bar-bg: #ffffff;
+    --ft-bar-border: #e3e7ec;
+    --ft-page-bg: #f3f5f8;
+    --ft-tree-bg: #fbfcfd;
+    --ft-child: #78909C;
+    --ft-spouse: #9C27B0;
+    --ft-male-bg: #DCEBFF;  --ft-male-border: #6FA3E0;
+    --ft-female-bg: #FFE1E6; --ft-female-border: #E58A9B;
+    --ft-dead-bg: #ECECEC;  --ft-dead-border: #9E9E9E;
+    --ft-active: #e7f1ff;
+    --ft-scroll-thumb: #c4cbd3;
+    --ft-scroll-track: transparent;
+}
+
+[data-bs-theme="dark"] {
+    color-scheme: dark; /* dark scrollbars and form controls */
+    --ft-bar-bg: #1b1f24;
+    --ft-bar-border: #2c323a;
+    --ft-page-bg: #121418;
+    --ft-tree-bg: #171a1f;
+    --ft-child: #90A4AE;
+    --ft-spouse: #CE93D8;
+    --ft-male-bg: #1E3A5F;  --ft-male-border: #5B8FD0;
+    --ft-female-bg: #4A2330; --ft-female-border: #D9788C;
+    --ft-dead-bg: #2E2E2E;  --ft-dead-border: #8A8A8A;
+    --ft-active: #1f2d40;
+    --ft-scroll-thumb: #4a525c;
+    --ft-scroll-track: #1b1f24;
+}
+
+body {
+    background: var(--ft-page-bg);
+}
+
+.app-bar {
+    background: var(--ft-bar-bg);
+    border-bottom: 1px solid var(--ft-bar-border);
+    gap: 0.5rem;
+}
+
+.stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.stats .chip {
+    font-size: 0.78rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+}
+
+.stats .chip b {
+    color: var(--bs-body-color);
+}
+
+.theme-toggle {
+    width: 2.2rem;
+}
+
+.view-menu {
+    min-width: 17rem;
+}
+
 #treeNetwork {
     width: 100%;
-    height: 75vh;
-    background-color: #f8f9fa;
-    border-radius: 0 0 5px 5px;
+    height: calc(100vh - 150px);
+    min-height: 420px;
+    background-color: var(--ft-tree-bg);
+    border-radius: 0 0 var(--bs-card-inner-border-radius) var(--bs-card-inner-border-radius);
 }
 
 #membersList {
-    max-height: 75vh;
+    max-height: calc(100vh - 175px);
     overflow-y: auto;
+    scrollbar-color: var(--ft-scroll-thumb) var(--ft-scroll-track);
 }
 
 .list-group-item {
@@ -15,17 +88,23 @@
 }
 
 .list-group-item:hover {
-    background-color: #e9ecef;
+    background-color: var(--bs-tertiary-bg);
 }
 
 .list-group-item.active-member {
-    background-color: #e7f1ff;
-    border-left: 3px solid #0d6efd;
+    background-color: var(--ft-active);
+    border-left: 3px solid var(--bs-primary);
 }
 
 .member-meta {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--bs-secondary-color);
+}
+
+.nick {
+    font-size: 0.82rem;
+    color: var(--bs-secondary-color);
+    font-style: italic;
 }
 
 .legend {
@@ -47,8 +126,8 @@
     border-top: 3px solid;
 }
 
-.legend .child { border-color: #78909C; }
-.legend .spouse { border-color: #9C27B0; border-top-style: dashed; }
+.legend .child { border-color: var(--ft-child); }
+.legend .spouse { border-color: var(--ft-spouse); border-top-style: dashed; }
 
 .legend .swatch {
     display: inline-block;
@@ -57,9 +136,63 @@
     border-radius: 3px;
 }
 
-.legend .male { background: #DCEBFF; border: 1px solid #6FA3E0; }
-.legend .female { background: #FFE1E6; border: 1px solid #E58A9B; }
-.legend .deceased { background: #e0e0e0; border: 1px dashed #757575; }
+.legend .male { background: var(--ft-male-bg); border: 1px solid var(--ft-male-border); }
+.legend .female { background: var(--ft-female-bg); border: 1px solid var(--ft-female-border); }
+.legend .deceased { background: var(--ft-dead-bg); border: 1px dashed var(--ft-dead-border); }
+
+/* Details panel */
+#detailsPanel {
+    --bs-offcanvas-width: 340px;
+}
+
+.detail-facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.3rem 0.9rem;
+    font-size: 0.92rem;
+    margin-bottom: 1rem;
+}
+
+.detail-facts dt {
+    font-weight: 500;
+    color: var(--bs-secondary-color);
+}
+
+.detail-facts dd {
+    margin: 0;
+}
+
+.relation-group {
+    margin-bottom: 0.9rem;
+}
+
+.relation-group h6 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.35rem;
+}
+
+.relation-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.relation-chips button {
+    font-size: 0.82rem;
+    border-radius: 999px;
+    padding: 0.15rem 0.65rem;
+}
+
+.detail-notes {
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    background: var(--bs-tertiary-bg);
+    border-radius: 6px;
+    padding: 0.5rem 0.7rem;
+}
 
 /* vis-network tooltip */
 div.vis-tooltip {
@@ -69,5 +202,17 @@ div.vis-tooltip {
     border-radius: 6px;
     max-width: 280px;
     white-space: normal;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 767.98px) {
+    #treeNetwork { height: 65vh; }
+    #membersList { max-height: 40vh; }
+}
+
+.min-w-0 {
+    min-width: 0;
 }

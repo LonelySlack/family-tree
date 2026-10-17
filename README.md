@@ -9,7 +9,17 @@ A small self-hosted web app for recording a family and seeing it as a tree. It's
   - children hang from the couple's midpoint, oldest first
   - generations are reordered so lines don't cross
 - **Hover card** for each person: dates, age, spouse, number of children and notes.
-- **Member list** ordered by generation, with search. Clicking a name zooms the tree to that person.
+- **Details panel** when you click someone: dates, age, generation and notes, plus their parents, spouse(s), siblings (half-siblings marked) and children. Click any relative to jump to them. There are also buttons to add a child or spouse already linked.
+- **Nicknames.** Family titles like "Pak Long" are shown under the name and can be searched.
+- **Member list** ordered by generation, with search by name or nickname.
+- **View options**, remembered per browser:
+  - top-to-bottom or left-to-right tree
+  - compact boxes (names only)
+  - nicknames on or off
+  - colour by gender on or off
+- **"This is me":** mark yourself, and the tree opens zoomed in on you.
+- **Dark mode.** Follows your device's setting, with a toggle in the toolbar.
+- **Export** the whole tree as a PNG image, or everyone as an Excel spreadsheet.
 - **Add, edit and delete** people. Double-click a person in the tree to edit them.
 - **Spouse links are kept two-way.** Setting A's spouse to B also sets B's spouse to A. If B is already married, the app asks before replacing that link.
 - **Checks when saving:**
@@ -81,6 +91,7 @@ The page uses a small JSON API:
 | Method | Path | |
 |---|---|---|
 | `GET` | `/api/members` | All members |
+| `GET` | `/api/export.xlsx` | Everyone as an Excel spreadsheet |
 | `POST` | `/api/members` | Add a member, returns `{"id": …}` |
 | `PUT` | `/api/members/<id>` | Replace a member's details |
 | `DELETE` | `/api/members/<id>` | Delete a member and clear links to them |
@@ -90,6 +101,7 @@ Members have these fields:
 | Field | Meaning |
 |---|---|
 | `name` | Required |
+| `nickname` | Optional, e.g. a family title |
 | `gender` | `Male`, `Female` or `Other` |
 | `birth_date`, `death_date` | `YYYY-MM-DD` |
 | `is_deceased` | `0` or `1` |
