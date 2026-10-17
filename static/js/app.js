@@ -36,7 +36,8 @@ async function api(url, { method = 'GET', json, form } = {}) {
 
 // homeId: "This is me" — the tree opens zoomed in on that person.
 const DEFAULT_SETTINGS = {
-    direction: 'down', compact: false, nicknames: true, photos: true, colourByGender: true, homeId: null
+    direction: 'down', compact: false, nicknames: true, photos: true, colourByGender: true, homeId: null,
+    lines: 'curved', // 'curved' | 'straight' | 'elbow' (right-angled)
 };
 let settings = { ...DEFAULT_SETTINGS };
 
@@ -47,6 +48,8 @@ function loadSettings() {
         settings = { ...DEFAULT_SETTINGS };
     }
     document.getElementById(settings.direction === 'right' ? 'dirRight' : 'dirDown').checked = true;
+    const lineInput = document.querySelector(`input[name="lines"][value="${settings.lines}"]`);
+    (lineInput || document.getElementById('linesCurved')).checked = true;
     document.getElementById('optCompact').checked = settings.compact;
     document.getElementById('optNicknames').checked = settings.nicknames;
     document.getElementById('optPhotos').checked = settings.photos;
@@ -797,9 +800,9 @@ function drawTree() {
     const colours = palette();
     const horizontal = settings.direction === 'right';
     const pos = layoutPos;
-    const screen = id => horizontal
-        ? { x: (pos[id].y / LEVEL_H) * H_LEVEL, y: pos[id].x * H_SCALE }
-        : { x: pos[id].x, y: pos[id].y };
+    // Layout coordinates -> where they're drawn, for either direction.
+    const place = (x, y) => horizontal ? { x: (y / LEVEL_H) * H_LEVEL, y: x * H_SCALE } : { x, y };
+    const screen = id => place(pos[id].x, pos[id].y);
 
     const nodes = new vis.DataSet(membersData.map(m => {
         // Short labels keep the tree readable; the rest is in the details panel.
@@ -891,16 +894,51 @@ function drawTree() {
         }
     });
 
+    // Children grouped by where their line starts: a couple's dot, or a
+    // single parent. Each start point is { id, x, y } in layout coordinates.
+    const families = new Map();
+    const addChild = (start, childId) => {
+        if (!families.has(start.id)) families.set(start.id, { start, kids: [] });
+        families.get(start.id).kids.push(childId);
+    };
     membersData.forEach(m => {
         const father = m.father_id && byId(m.father_id);
         const mother = m.mother_id && byId(m.mother_id);
         if (father && mother && adjacent(father.id, mother.id)) {
-            edges.add({ from: addCouple(father.id, mother.id), to: m.id, ...childLine });
+            const key = addCouple(father.id, mother.id);
+            addChild({ id: key, x: (pos[father.id].x + pos[mother.id].x) / 2, y: pos[father.id].y }, m.id);
         } else {
-            if (father) edges.add({ from: father.id, to: m.id, ...childLine });
-            if (mother) edges.add({ from: mother.id, to: m.id, ...childLine });
+            if (father) addChild({ id: father.id, ...pos[father.id] }, m.id);
+            if (mother) addChild({ id: mother.id, ...pos[mother.id] }, m.id);
         }
     });
+
+    const lineStyle = settings.lines;
+    // Invisible bend points for right-angled lines; string ids, so they're never selectable.
+    const bend = (id, x, y) => nodes.add({
+        id, ...place(x, y), shape: 'dot', size: 1, borderWidth: 0, chosen: false,
+        color: { background: colours.child, border: colours.child },
+    });
+    const plain = { color: { color: colours.child }, width: 2, smooth: false };
+
+    for (const { start, kids } of families.values()) {
+        if (lineStyle !== 'elbow') {
+            kids.forEach(k => edges.add({ from: start.id, to: k, ...childLine, ...(lineStyle === 'straight' ? { smooth: false } : {}) }));
+            continue;
+        }
+        // Down from the parents to a bar halfway to the next generation,
+        // along the bar, then down into each child.
+        const barY = start.y + LEVEL_H / 2;
+        const top = `bend-${start.id}`;
+        bend(top, start.x, barY);
+        edges.add({ from: start.id, to: top, ...plain });
+        for (const k of kids) {
+            const drop = `bend-${start.id}-${k}`;
+            bend(drop, pos[k].x, barY);
+            edges.add({ from: top, to: drop, ...plain });
+            edges.add({ from: drop, to: k, ...childLine, smooth: false });
+        }
+    }
 
     const options = {
         // Positions come from computeLayout, not vis-network's own layout.

@@ -47,6 +47,15 @@
                         <input type="radio" class="btn-check" name="direction" id="dirRight" value="right" onchange="setSetting('direction', 'right')">
                         <label class="btn btn-outline-secondary btn-sm" for="dirRight">→ Left to right</label>
                     </div>
+                    <h6 class="dropdown-header px-1">Lines</h6>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="lines" id="linesCurved" value="curved" onchange="setSetting('lines', 'curved')">
+                        <label class="btn btn-outline-secondary btn-sm" for="linesCurved">Curved</label>
+                        <input type="radio" class="btn-check" name="lines" id="linesStraight" value="straight" onchange="setSetting('lines', 'straight')">
+                        <label class="btn btn-outline-secondary btn-sm" for="linesStraight">Straight</label>
+                        <input type="radio" class="btn-check" name="lines" id="linesElbow" value="elbow" onchange="setSetting('lines', 'elbow')">
+                        <label class="btn btn-outline-secondary btn-sm" for="linesElbow">Right-angled</label>
+                    </div>
                     <h6 class="dropdown-header px-1">Boxes</h6>
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" id="optCompact" onchange="setSetting('compact', this.checked)">
