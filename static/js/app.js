@@ -325,21 +325,55 @@ function computeLayout(data, levelMap) {
     };
     const childIds = id => data.filter(c => c.father_id === id || c.mother_id === id).map(c => c.id);
 
-    // 1. Units, oldest first so siblings start in birth order.
+    // 1. Units: a person plus everyone they're partnered with — their linked
+    //    spouse, and anyone else they have children with (a first wife, say).
+    //    Partners form a chain, so someone with two wives sits between them.
+    const partnersOf = new Map(data.map(m => [m.id, new Set()]));
+    const pair = (a, b) => {
+        if (a === b || !people.has(a) || !people.has(b) || levelOf(a) !== levelOf(b)) return;
+        partnersOf.get(a).add(b);
+        partnersOf.get(b).add(a);
+    };
+    for (const m of data) {
+        const s = m.spouse_id && people.get(m.spouse_id);
+        if (s && s.spouse_id === m.id) pair(m.id, s.id);
+        if (m.father_id && m.mother_id) pair(m.father_id, m.mother_id);
+    }
+
+    /** Lay a group of partners out as a line: walk from an end of the chain;
+     *  if it isn't a chain, put the most-partnered person in the middle. */
+    function chainOrder(group) {
+        const ends = group.filter(id => partnersOf.get(id).size <= 1);
+        const isChain = group.every(id => partnersOf.get(id).size <= 2) && ends.length === 2;
+        if (isChain) {
+            const order = [ends[0]];
+            while (order.length < group.length) {
+                const next = [...partnersOf.get(order[order.length - 1])].find(p => !order.includes(p));
+                order.push(next);
+            }
+            // Husband on the left for a plain couple, until parents say otherwise.
+            if (order.length === 2 && people.get(order[0]).gender === 'Female') order.reverse();
+            return order;
+        }
+        const hub = [...group].sort((a, b) => partnersOf.get(b).size - partnersOf.get(a).size)[0];
+        const rest = group.filter(id => id !== hub);
+        const half = Math.ceil(rest.length / 2);
+        return [...rest.slice(0, half), hub, ...rest.slice(half)];
+    }
+
     const rows = Array.from({ length: maxLevel + 1 }, () => []);
     const unitOf = new Map();
+    // Oldest first, so siblings start out in birth order.
     const oldestFirst = [...data].sort((a, b) =>
         (a.birth_date || '9999').localeCompare(b.birth_date || '9999') || a.id - b.id);
     for (const m of oldestFirst) {
         if (unitOf.has(m.id)) continue;
-        const members = [m.id];
-        const s = m.spouse_id && people.get(m.spouse_id);
-        if (s && !unitOf.has(s.id) && s.spouse_id === m.id && levelOf(s.id) === levelOf(m.id)) {
-            members.push(s.id);
-            if (m.gender === 'Female') members.reverse(); // husband on the left by default
+        const group = [m.id];
+        for (let i = 0; i < group.length; i++) {
+            for (const p of partnersOf.get(group[i])) if (!group.includes(p)) group.push(p);
         }
-        const unit = { members, x: 0 };
-        members.forEach(id => unitOf.set(id, unit));
+        const unit = { members: chainOrder(group), x: 0 };
+        unit.members.forEach(id => unitOf.set(id, unit));
         rows[levelOf(m.id)].push(unit);
     }
 
@@ -381,15 +415,25 @@ function computeLayout(data, levelMap) {
         place(row, row.map(u => want.get(u)));
     }
 
-    // Spouse sides: whoever's parents are further left sits on the left.
-    function orientCouples(row) {
+    /** Which way round a unit sits. The ends go towards their own parents;
+     *  failing that, towards their own children — so with two wives, each
+     *  wife ends up on the side where her children are. */
+    function orientUnits(row) {
+        const towards = (id, related) => {
+            const xs = related(id).filter(r => xOf.has(r)).map(r => xOf.get(r));
+            return xs.length ? mean(xs) : null;
+        };
         for (const u of row) {
-            if (u.members.length !== 2) continue;
-            const side = u.members.map(id => {
-                const ps = parentIds(id).filter(p => xOf.has(p));
-                return ps.length ? mean(ps.map(p => xOf.get(p))) : null;
-            });
-            if (side[0] !== null && side[1] !== null && side[0] > side[1]) u.members.reverse();
+            if (u.members.length < 2) continue;
+            const first = u.members[0];
+            const last = u.members[u.members.length - 1];
+            let a = towards(first, parentIds);
+            let b = towards(last, parentIds);
+            if (a === null || b === null) {
+                a = towards(first, childIds);
+                b = towards(last, childIds);
+            }
+            if (a !== null && b !== null && a > b) u.members.reverse();
             setMemberX(u);
         }
     }
@@ -410,10 +454,10 @@ function computeLayout(data, levelMap) {
     };
 
     for (let pass = 0; pass < 6; pass++) {
-        for (let L = 1; L <= maxLevel; L++) { orientCouples(rows[L]); arrange(rows[L], underParents); }
-        for (let L = maxLevel - 1; L >= 0; L--) arrange(rows[L], overChildren);
+        for (let L = 1; L <= maxLevel; L++) { orientUnits(rows[L]); arrange(rows[L], underParents); }
+        for (let L = maxLevel - 1; L >= 0; L--) { orientUnits(rows[L]); arrange(rows[L], overChildren); }
     }
-    for (let L = 1; L <= maxLevel; L++) { orientCouples(rows[L]); arrange(rows[L], underParents); }
+    for (let L = 1; L <= maxLevel; L++) { orientUnits(rows[L]); arrange(rows[L], underParents); }
 
     const minX = Math.min(...xOf.values());
     const pos = {};
@@ -483,31 +527,44 @@ function drawTree() {
     const edges = new vis.DataSet();
     const childLine = { color: { color: '#78909C' }, width: 2, arrows: { to: { enabled: true, scaleFactor: 0.5 } } };
 
-    // Each couple gets a small dot midway along the spouse line, and their
-    // children hang from that dot — one line per child instead of two crossing ones.
+    // Each couple gets a small dot midway along a dashed partner line, and
+    // their children hang from that dot — one line per child instead of two
+    // crossing ones. A couple is a linked spouse, or two people who share
+    // children (a first wife) and sit side by side in the layout.
     const coupleKey = (a, b) => `couple-${Math.min(a, b)}-${Math.max(a, b)}`;
-    const isCouple = (a, b) => byId(a)?.spouse_id === b && byId(b)?.spouse_id === a;
+    const isSpouse = (a, b) => byId(a)?.spouse_id === b && byId(b)?.spouse_id === a;
+    const adjacent = (a, b) => pos[a].y === pos[b].y &&
+        Math.abs(Math.abs(pos[a].x - pos[b].x) - (NODE_W + COUPLE_GAP)) < 1;
+    const partnerLine = { color: { color: '#9C27B0' }, dashes: true, width: 3, smooth: false };
+
+    const couples = new Set();
+    function addCouple(a, b) {
+        const key = coupleKey(a, b);
+        if (couples.has(key)) return key;
+        couples.add(key);
+        nodes.add({
+            id: key, shape: 'dot', size: 5, chosen: false,
+            color: { background: '#9C27B0', border: '#9C27B0' },
+            x: (pos[a].x + pos[b].x) / 2, y: pos[a].y
+        });
+        edges.add({ from: a, to: key, ...partnerLine });
+        edges.add({ from: key, to: b, ...partnerLine });
+        return key;
+    }
 
     membersData.forEach(m => {
         const s = m.spouse_id && byId(m.spouse_id);
-        if (s && m.id < s.id && isCouple(m.id, s.id)) {
-            const key = coupleKey(m.id, s.id);
-            nodes.add({
-                id: key, shape: 'dot', size: 5, chosen: false,
-                color: { background: '#9C27B0', border: '#9C27B0' },
-                x: (pos[m.id].x + pos[s.id].x) / 2, y: pos[m.id].y
-            });
-            edges.add({ from: m.id, to: key, color: { color: '#9C27B0' }, dashes: true, width: 3, smooth: false });
-            edges.add({ from: key, to: s.id, color: { color: '#9C27B0' }, dashes: true, width: 3, smooth: false });
-        } else if (s && m.id < s.id) {
-            // One-sided link (old data): still show it.
-            edges.add({ from: m.id, to: s.id, color: { color: '#9C27B0' }, dashes: true, width: 3, smooth: false });
+        if (s && m.id < s.id) {
+            if (isSpouse(m.id, s.id) && adjacent(m.id, s.id)) addCouple(m.id, s.id);
+            else edges.add({ from: m.id, to: s.id, ...partnerLine }); // one-sided or far apart
         }
+    });
 
+    membersData.forEach(m => {
         const father = m.father_id && byId(m.father_id);
         const mother = m.mother_id && byId(m.mother_id);
-        if (father && mother && isCouple(father.id, mother.id)) {
-            edges.add({ from: coupleKey(father.id, mother.id), to: m.id, ...childLine });
+        if (father && mother && adjacent(father.id, mother.id)) {
+            edges.add({ from: addCouple(father.id, mother.id), to: m.id, ...childLine });
         } else {
             if (father) edges.add({ from: father.id, to: m.id, ...childLine });
             if (mother) edges.add({ from: mother.id, to: m.id, ...childLine });
