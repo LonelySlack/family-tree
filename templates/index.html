@@ -26,8 +26,16 @@
             <span class="navbar-brand mb-0 h1">🌳 Family Tree</span>
             <div class="stats" id="stats"></div>
         </div>
-        <div class="d-flex align-items-center gap-2 ms-auto">
-            <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Add member</button>
+        <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
+            <button class="btn btn-primary btn-sm editor-only" onclick="openAddModal()">+ Add member</button>
+
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">Tools</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" onclick="openRelationshipModal(); return false;">🔗 How are we related?</a></li>
+                    <li class="editor-only"><a class="dropdown-item" href="#" onclick="openImportModal(); return false;">📥 Import from Excel</a></li>
+                </ul>
+            </div>
 
             <div class="dropdown">
                 <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">View</button>
@@ -49,6 +57,10 @@
                         <label class="form-check-label" for="optNicknames">Show nicknames</label>
                     </div>
                     <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="optPhotos" onchange="setSetting('photos', this.checked)">
+                        <label class="form-check-label" for="optPhotos">Show photos</label>
+                    </div>
+                    <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" id="optColour" onchange="setSetting('colourByGender', this.checked)">
                         <label class="form-check-label" for="optColour">Colour by gender</label>
                     </div>
@@ -64,6 +76,19 @@
             </div>
 
             <button class="btn btn-outline-secondary btn-sm theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch light/dark mode"></button>
+
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" id="userButton">
+                    <span id="userName">…</span> <span class="badge text-bg-danger d-none" id="pendingBadge"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><span class="dropdown-item-text small text-body-secondary" id="userRole"></span></li>
+                    <li class="admin-only"><a class="dropdown-item" href="#" onclick="openUsersModal(); return false;">👥 Manage accounts <span class="badge text-bg-danger d-none" id="pendingBadge2"></span></a></li>
+                    <li><a class="dropdown-item" href="#" onclick="openPasswordModal(); return false;">🔑 Change password</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" onclick="logout(); return false;">Log out</a></li>
+                </ul>
+            </div>
         </div>
     </nav>
 
@@ -83,13 +108,13 @@
                     <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
                         <div class="legend small" id="legend">
                             <span><i class="line child"></i>Child of</span>
-                            <span><i class="line spouse"></i>Spouse</span>
+                            <span><i class="line spouse"></i>Married</span>
                             <span class="gender-key"><i class="swatch male"></i>Male</span>
                             <span class="gender-key"><i class="swatch female"></i>Female</span>
                             <span><i class="swatch deceased"></i>Meninggal Dunia</span>
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <span class="small text-body-secondary d-none d-xl-inline">Click for details · double-click to edit</span>
+                            <span class="small text-body-secondary d-none d-xl-inline" id="treeHint">Click for details · double-click to edit</span>
                             <button class="btn btn-sm btn-outline-secondary" onclick="fitTree()">Fit to screen</button>
                         </div>
                     </div>
@@ -103,17 +128,20 @@
 
     <!-- Person details: opens beside the tree when you click someone. -->
     <div class="offcanvas offcanvas-end" data-bs-scroll="true" data-bs-backdrop="false" tabindex="-1" id="detailsPanel">
-        <div class="offcanvas-header pb-2">
-            <div>
-                <h5 class="offcanvas-title mb-0" id="detailsName"></h5>
-                <div class="text-body-secondary" id="detailsNickname"></div>
+        <div class="offcanvas-header pb-2 align-items-start">
+            <div class="d-flex gap-3 align-items-center">
+                <div id="detailsPhoto"></div>
+                <div>
+                    <h5 class="offcanvas-title mb-0" id="detailsName"></h5>
+                    <div class="text-body-secondary" id="detailsNickname"></div>
+                </div>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
         </div>
         <div class="offcanvas-body pt-0" id="detailsBody"></div>
     </div>
 
-    <!-- Modal for Add/Edit -->
+    <!-- Add / edit a person -->
     <div class="modal fade" id="memberModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
@@ -125,6 +153,14 @@
                     <div class="alert alert-danger py-2 d-none" id="formError"></div>
                     <form id="memberForm" onsubmit="event.preventDefault(); saveMember();">
                         <input type="hidden" id="memberId">
+                        <div class="d-flex gap-3 align-items-center mb-3">
+                            <div id="photoPreview"></div>
+                            <div class="flex-grow-1">
+                                <label class="form-label mb-1" for="photoInput">Photo</label>
+                                <input type="file" class="form-control form-control-sm" id="photoInput" accept="image/*" onchange="previewPhoto()">
+                                <button type="button" class="btn btn-link btn-sm text-danger p-0 mt-1 d-none" id="removePhotoBtn" onclick="markPhotoRemoved()">Remove photo</button>
+                            </div>
+                        </div>
                         <div class="row">
                             <div class="col-sm-7 mb-3">
                                 <label class="form-label">Name</label>
@@ -135,14 +171,20 @@
                                 <input type="text" class="form-control" id="nickname" placeholder="e.g. Pak Long">
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Gender</label>
-                            <select class="form-select" id="gender">
-                                <option value="">Select...</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                                <option value="Other">Other</option>
-                            </select>
+                        <div class="row">
+                            <div class="col-sm-7 mb-3">
+                                <label class="form-label">Gender</label>
+                                <select class="form-select" id="gender">
+                                    <option value="">Select...</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-sm-5 mb-3">
+                                <label class="form-label">Birth order</label>
+                                <input type="number" min="1" class="form-control" id="birth_order" placeholder="1 = eldest">
+                            </div>
                         </div>
                         <div class="row">
                             <div class="col mb-3">
@@ -167,9 +209,10 @@
                             <select class="form-select" id="mother_id"></select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Spouse</label>
-                            <select class="form-select" id="spouse_id"></select>
-                            <div class="form-text">Linked both ways: their spouse is set to this person too.</div>
+                            <label class="form-label">Spouses</label>
+                            <div class="relation-chips mb-2" id="spouseChips"></div>
+                            <select class="form-select" id="spouseAdd" onchange="addSpouseFromSelect()"></select>
+                            <div class="form-text">Add as many as apply. Each marriage shows on both people.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Notes</label>
@@ -186,6 +229,103 @@
         </div>
     </div>
 
+    <!-- How are we related? -->
+    <div class="modal fade" id="relationshipModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">🔗 How are we related?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col">
+                            <label class="form-label">Person</label>
+                            <select class="form-select" id="relA" onchange="showRelationship()"></select>
+                        </div>
+                        <div class="col-auto pb-1">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="swapRelationship()" title="Swap">⇄</button>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">is related to</label>
+                            <select class="form-select" id="relB" onchange="showRelationship()"></select>
+                        </div>
+                    </div>
+                    <div id="relResult"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import from Excel -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">📥 Import from Excel</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-body-secondary mb-2">
+                        Use the same layout as <a href="/api/export.xlsx">the Excel export</a>: edit that file and import it back,
+                        or start from the <a href="/api/import/template.xlsx">blank template</a>. Rows with an ID update
+                        that person; rows without one add someone new. Nobody is ever deleted, and you'll see
+                        every change before it's saved.
+                    </p>
+                    <input type="file" class="form-control mb-3" id="importFile" accept=".xlsx" onchange="previewImport()">
+                    <div id="importResult"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="importApplyBtn" disabled onclick="applyImport()">Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage accounts (admin) -->
+    <div class="modal fade" id="usersModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">👥 Accounts</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-body-secondary">
+                        <b>Viewer</b> can look · <b>Editor</b> can add and change people · <b>Admin</b> can also manage accounts.
+                        New accounts wait as <b>pending</b> until you approve them.
+                    </p>
+                    <div id="usersList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change password -->
+    <div class="modal fade" id="passwordModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <form class="modal-content" onsubmit="event.preventDefault(); changePassword();">
+                <div class="modal-header">
+                    <h5 class="modal-title">Change password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger py-2 d-none" id="passwordError"></div>
+                    <label class="form-label">Current password</label>
+                    <input type="password" class="form-control mb-2" id="pwCurrent" autocomplete="current-password" required>
+                    <label class="form-label">New password</label>
+                    <input type="password" class="form-control mb-2" id="pwNew" autocomplete="new-password" minlength="8" required>
+                    <label class="form-label">Confirm new password</label>
+                    <input type="password" class="form-control" id="pwNew2" autocomplete="new-password" required>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3">
         <div class="toast align-items-center border-0" id="toast" role="status">
             <div class="d-flex">
@@ -197,6 +337,7 @@
 
     <script src="/static/vendor/bootstrap.bundle.min.js"></script>
     <script src="/static/js/layout.js"></script>
+    <script src="/static/js/relations.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

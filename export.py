@@ -1,4 +1,4 @@
-"""Spreadsheet export of the whole tree."""
+"""Spreadsheet export of the whole tree, in the format importer.py reads back."""
 import io
 from datetime import date
 
@@ -31,7 +31,6 @@ def age(member, today=None):
 def generations(members):
     """Generation number per id, 1 = oldest, matching the tree's rows:
     a child sits below both parents, and spouses share a generation."""
-    by_id = {m['id']: m for m in members}
     level = {m['id']: 0 for m in members}
     for _ in range(100):
         changed = False
@@ -40,65 +39,135 @@ def generations(members):
             for p in (m['father_id'], m['mother_id']):
                 if p in level:
                     new = max(new, level[p] + 1)
-            if m['spouse_id'] in level:
-                new = max(new, level[m['spouse_id']])
+            for s in m.get('spouse_ids', []):
+                if s in level:
+                    new = max(new, level[s])
             if new != level[m['id']]:
                 level[m['id']] = new
                 changed = True
         if not changed:
             break
-    return {i: lv + 1 for i, lv in level.items() if i in by_id}
+    return {i: lv + 1 for i, lv in level.items()}
 
 
+# Columns the importer reads are marked; the rest are for reading only.
 COLUMNS = [
-    ('Generation', 11), ('Name', 34), ('Nickname', 16), ('Gender', 9),
-    ('Birth date', 12), ('Death date', 12), ('Status', 16), ('Age', 6),
-    ('Father', 30), ('Mother', 30), ('Spouse', 30), ('Children', 50), ('Notes', 50),
+    ('ID', 6),            # read: which existing person a row updates
+    ('Generation', 11),
+    ('Name', 34),         # read
+    ('Nickname', 16),     # read
+    ('Gender', 9),        # read
+    ('Birth date', 12),   # read
+    ('Death date', 12),   # read
+    ('Status', 16),       # read
+    ('Birth order', 11),  # read
+    ('Age', 6),
+    ('Father', 30),       # read
+    ('Mother', 30),       # read
+    ('Spouses', 34),      # read
+    ('Children', 50),
+    ('Notes', 50),        # read
 ]
+WRAP = {'Spouses', 'Children', 'Notes'}
+
+
+def _style(ws):
+    header_fill = PatternFill('solid', start_color='0D6EFD')
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = header_fill
+        cell.alignment = Alignment(vertical='center')
+    names = [c for c, _ in COLUMNS]
+    for i, (_, width) in enumerate(COLUMNS, 1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical='top', wrap_text=names[cell.column - 1] in WRAP)
+    ws.freeze_panes = 'D2'
+    ws.auto_filter.ref = ws.dimensions
+
+
+def _instructions(wb):
+    ws = wb.create_sheet('How to import')
+    lines = [
+        'How to fill this in',
+        '',
+        'One row per person, on the "Family" sheet. Only the first sheet is read.',
+        'ID: leave blank for someone new. Keep the ID to update someone already in the tree.',
+        'Name is required. Gender: Male, Female or Other.',
+        'Dates: YYYY-MM-DD (e.g. 1962-08-30) or DD/MM/YYYY.',
+        'Status: "Meninggal Dunia" or "Deceased" if they have passed away; otherwise leave blank.',
+        'Birth order: 1 for the eldest child, 2 for the next, and so on.',
+        'Father / Mother: their name exactly as written in the Name column, or #ID (e.g. #12).',
+        'Spouses: names or #IDs separated by commas.',
+        'Generation, Age and Children are worked out by the app and ignored when importing.',
+        'Importing never deletes anyone; you will see a preview before anything is saved.',
+    ]
+    for line in lines:
+        ws.append([line])
+    ws['A1'].font = Font(bold=True, size=13)
+    ws.column_dimensions['A'].width = 100
 
 
 def to_xlsx(members):
     by_id = {m['id']: m for m in members}
     gen = generations(members)
-    name_of = lambda i: display_name(by_id[i]['name']) if i in by_id else ''
+    name_count = {}
+    for m in members:
+        key = display_name(m['name']).lower()
+        name_count[key] = name_count.get(key, 0) + 1
+
+    def ref(i):
+        """A person as the importer will read them back: their name, or
+        "#ID name" when two people share that name."""
+        if i not in by_id:
+            return ''
+        name = display_name(by_id[i]['name'])
+        return name if name_count[name.lower()] == 1 else f'#{i} {name}'
 
     wb = Workbook()
     ws = wb.active
     ws.title = 'Family'
     ws.append([c for c, _ in COLUMNS])
 
-    ordered = sorted(members, key=lambda m: (gen[m['id']], m['birth_date'] or '9999', m['id']))
+    ordered = sorted(members, key=lambda m: (
+        gen[m['id']], m['birth_order'] or 999, m['birth_date'] or '9999', m['id']))
     for m in ordered:
         children = [c for c in ordered if m['id'] in (c['father_id'], c['mother_id'])]
         ws.append([
+            m['id'],
             gen[m['id']],
             display_name(m['name']),
-            m.get('nickname') or '',
+            m['nickname'] or '',
             m['gender'] or '',
             m['birth_date'] or '',
             m['death_date'] or '',
             'Meninggal Dunia' if m['is_deceased'] else '',
+            m['birth_order'],
             age(m),
-            name_of(m['father_id']),
-            name_of(m['mother_id']),
-            name_of(m['spouse_id']),
+            ref(m['father_id']),
+            ref(m['mother_id']),
+            ', '.join(ref(s) for s in m.get('spouse_ids', [])),
             ', '.join(display_name(c['name']) for c in children),
             m['notes'] or '',
         ])
+    _style(ws)
+    _instructions(wb)
 
-    header_fill = PatternFill('solid', start_color='0D6EFD')
-    for cell in ws[1]:
-        cell.font = Font(bold=True, color='FFFFFF')
-        cell.fill = header_fill
-        cell.alignment = Alignment(vertical='center')
-    for i, (_, width) in enumerate(COLUMNS, 1):
-        ws.column_dimensions[get_column_letter(i)].width = width
-    for row in ws.iter_rows(min_row=2):
-        for cell in row:
-            cell.alignment = Alignment(vertical='top', wrap_text=cell.column_letter in ('L', 'M'))
-    ws.freeze_panes = 'C2'
-    ws.auto_filter.ref = ws.dimensions
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out
 
+
+def template_xlsx():
+    """Empty sheet with the right headers, for starting a tree from Excel."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Family'
+    ws.append([c for c, _ in COLUMNS])
+    _style(ws)
+    _instructions(wb)
     out = io.BytesIO()
     wb.save(out)
     out.seek(0)

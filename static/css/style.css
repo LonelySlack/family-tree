@@ -216,3 +216,54 @@ div.vis-tooltip {
 .min-w-0 {
     min-width: 0;
 }
+
+/* Accounts: hide what this role can't use. */
+body.read-only .editor-only { display: none !important; }
+body:not(.is-admin) .admin-only { display: none !important; }
+
+/* Photos and initials */
+.avatar {
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.avatar-initials {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+}
+
+.avatar-initials.male { background: var(--ft-male-bg); color: var(--bs-body-color); }
+.avatar-initials.female { background: var(--ft-female-bg); color: var(--bs-body-color); }
+
+/* Relationship finder */
+.rel-answer {
+    background: var(--bs-tertiary-bg);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+}
+
+.rel-en { font-size: 1.05rem; }
+.rel-ms { color: var(--bs-secondary-color); margin-top: 0.25rem; }
+.rel-term { color: var(--bs-primary); font-weight: 600; }
+
+.rel-path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.4rem;
+    font-size: 0.9rem;
+}
+
+.path-person {
+    background: var(--bs-secondary-bg);
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+}
+
+.path-arrow small { color: var(--bs-secondary-color); }

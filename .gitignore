@@ -4,3 +4,7 @@ __pycache__/
 # The family data itself: personal, and backed up daily to ~/backups/family-tree.
 family_tree.db
 *.db-journal
+# Per-install secrets and pre-import database snapshots.
+instance/
+# Uploaded photos of family members.
+uploads/

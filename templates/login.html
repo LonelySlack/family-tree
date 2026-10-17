@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Tree · Sign in</title>
+    <script>
+        (function () {
+            let theme = null;
+            try { theme = localStorage.getItem('ft-theme'); } catch (e) {}
+            if (theme !== 'light' && theme !== 'dark') {
+                theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+    <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="d-flex align-items-center min-vh-100">
+    <main class="container" style="max-width: 420px;">
+        <div class="text-center mb-4">
+            <div class="display-6">🌳</div>
+            <h1 class="h3">Family Tree</h1>
+        </div>
+
+        {% if user and user.role == 'pending' %}
+        <div class="card">
+            <div class="card-body text-center">
+                <h2 class="h5">Waiting for approval</h2>
+                <p class="text-body-secondary mb-3">
+                    Hi {{ user.display_name }}. Your account is set up, but an admin needs to
+                    approve it before you can see the family tree. Check back later.
+                </p>
+                <button class="btn btn-outline-secondary" onclick="logout()">Log out</button>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                    <li class="nav-item"><button class="nav-link {% if not first_run %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#loginPane" type="button">Log in</button></li>
+                    <li class="nav-item"><button class="nav-link {% if first_run %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#registerPane" type="button">Register</button></li>
+                </ul>
+            </div>
+            <div class="card-body tab-content">
+                <div class="alert alert-danger py-2 d-none" id="error"></div>
+
+                <form class="tab-pane fade {% if not first_run %}show active{% endif %}" id="loginPane" onsubmit="event.preventDefault(); login();">
+                    <div class="mb-3">
+                        <label class="form-label" for="loginUser">Username</label>
+                        <input class="form-control" id="loginUser" autocomplete="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="loginPass">Password</label>
+                        <input class="form-control" id="loginPass" type="password" autocomplete="current-password" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="remember" checked>
+                        <label class="form-check-label" for="remember">Keep me logged in for 30 days</label>
+                    </div>
+                    <button class="btn btn-primary w-100">Log in</button>
+                </form>
+
+                <form class="tab-pane fade {% if first_run %}show active{% endif %}" id="registerPane" onsubmit="event.preventDefault(); register();">
+                    {% if first_run %}
+                    <div class="alert alert-info py-2 small">
+                        No accounts yet. The first account you create here becomes the <b>admin</b>, who approves everyone else.
+                    </div>
+                    {% else %}
+                    <p class="small text-body-secondary">After you register, an admin has to approve your account before you can see the tree.</p>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label" for="regName">Your name</label>
+                        <input class="form-control" id="regName" autocomplete="name" placeholder="So the admin knows who you are">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="regUser">Username</label>
+                        <input class="form-control" id="regUser" autocomplete="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="regPass">Password</label>
+                        <input class="form-control" id="regPass" type="password" autocomplete="new-password" minlength="8" required>
+                        <div class="form-text">At least 8 characters.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="regPass2">Confirm password</label>
+                        <input class="form-control" id="regPass2" type="password" autocomplete="new-password" required>
+                    </div>
+                    <button class="btn btn-primary w-100">Create account</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+
+    <script src="/static/vendor/bootstrap.bundle.min.js"></script>
+    <script>
+        function showError(message) {
+            const box = document.getElementById('error');
+            box.textContent = message || '';
+            box.classList.toggle('d-none', !message);
+        }
+
+        async function post(url, body) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+                body: JSON.stringify(body || {})
+            });
+            const data = await res.json().catch(() => ({}));
+            return { ok: res.ok, data };
+        }
+
+        async function login() {
+            showError('');
+            const { ok, data } = await post('/api/auth/login', {
+                username: document.getElementById('loginUser').value.trim(),
+                password: document.getElementById('loginPass').value,
+                remember: document.getElementById('remember').checked
+            });
+            if (!ok) return showError(data.error || 'Could not log in');
+            location.href = '/';
+        }
+
+        async function register() {
+            showError('');
+            const pass = document.getElementById('regPass').value;
+            if (pass !== document.getElementById('regPass2').value) return showError('The passwords do not match');
+            const { ok, data } = await post('/api/auth/register', {
+                display_name: document.getElementById('regName').value.trim(),
+                username: document.getElementById('regUser').value.trim(),
+                password: pass
+            });
+            if (!ok) return showError(data.error || 'Could not create the account');
+            location.href = data.role === 'pending' ? '/login' : '/';
+        }
+
+        async function logout() {
+            await post('/api/auth/logout');
+            location.href = '/login';
+        }
+    </script>
+</body>
+</html>

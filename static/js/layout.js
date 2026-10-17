@@ -14,6 +14,13 @@ function calculateAge(birthDateString, deathDateString, isDeceased) {
     return age;
 }
 
+/** Sibling order: birth order where both have one ("anak ke-"), else birth
+ *  date, else the order they were added. */
+function eldestFirst(a, b) {
+    if (a.birth_order && b.birth_order && a.birth_order !== b.birth_order) return a.birth_order - b.birth_order;
+    return (a.birth_date || '9999').localeCompare(b.birth_date || '9999') || a.id - b.id;
+}
+
 function calculateLevels(data) {
     let levelMap = {};
     data.forEach(m => levelMap[m.id] = 0);
@@ -33,9 +40,8 @@ function calculateLevels(data) {
             if (m.mother_id && levelMap[m.mother_id] !== undefined) {
                 newLevel = Math.max(newLevel, levelMap[m.mother_id] + 1);
             }
-            if (m.spouse_id && levelMap[m.spouse_id] !== undefined) {
-                let spouseLevel = levelMap[m.spouse_id];
-                if (spouseLevel > newLevel) newLevel = spouseLevel;
+            for (const s of m.spouse_ids || []) {
+                if (levelMap[s] !== undefined && levelMap[s] > newLevel) newLevel = levelMap[s];
             }
 
             if (newLevel !== currentLevel) {
@@ -46,9 +52,10 @@ function calculateLevels(data) {
     }
 
     data.forEach(m => {
-        if (m.spouse_id && levelMap[m.spouse_id] !== undefined) {
-            levelMap[m.id] = Math.max(levelMap[m.id], levelMap[m.spouse_id]);
-            levelMap[m.spouse_id] = levelMap[m.id];
+        for (const s of m.spouse_ids || []) {
+            if (levelMap[s] === undefined) continue;
+            levelMap[m.id] = Math.max(levelMap[m.id], levelMap[s]);
+            levelMap[s] = levelMap[m.id];
         }
     });
 
@@ -94,8 +101,7 @@ function computeLayout(data, levelMap) {
         partnersOf.get(b).add(a);
     };
     for (const m of data) {
-        const s = m.spouse_id && people.get(m.spouse_id);
-        if (s && s.spouse_id === m.id) pair(m.id, s.id);
+        for (const s of m.spouse_ids || []) pair(m.id, s);
         if (m.father_id && m.mother_id) pair(m.father_id, m.mother_id);
     }
 
@@ -123,8 +129,7 @@ function computeLayout(data, levelMap) {
     const rows = Array.from({ length: maxLevel + 1 }, () => []);
     const unitOf = new Map();
     // Oldest first, so siblings start out in birth order.
-    const oldestFirst = [...data].sort((a, b) =>
-        (a.birth_date || '9999').localeCompare(b.birth_date || '9999') || a.id - b.id);
+    const oldestFirst = [...data].sort(eldestFirst);
     for (const m of oldestFirst) {
         if (unitOf.has(m.id)) continue;
         const group = [m.id];
