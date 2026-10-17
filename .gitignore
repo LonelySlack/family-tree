@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+# The family data itself: personal, and backed up daily to ~/backups/family-tree.
+family_tree.db
+*.db-journal
