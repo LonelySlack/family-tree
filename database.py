@@ -1,7 +1,9 @@
 import sqlite3
 import os
 
-DB_FILE = 'family_tree.db'
+# Next to this file, not the working directory, so the app finds its data
+# however it's started.
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'family_tree.db')
 
 def get_connection():
     conn = sqlite3.connect(DB_FILE)

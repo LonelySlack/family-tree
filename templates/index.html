@@ -3,35 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Family Tree Maker</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Family Tree</title>
+    <!-- Served locally so the tree still loads when the internet is down. -->
+    <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
-    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="/static/vendor/vis-network.min.js"></script>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-dark bg-primary">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">Family Tree Maker</a>
-            <button class="btn btn-light ms-auto" data-bs-toggle="modal" data-bs-target="#memberModal" onclick="openAddModal()">Add Member</button>
+            <span class="navbar-brand">Family Tree <small class="opacity-75" id="memberCount"></small></span>
+            <button class="btn btn-light ms-auto" onclick="openAddModal()">+ Add Member</button>
         </div>
     </nav>
 
     <div class="container-fluid mt-3">
-        <div class="row">
+        <div class="row g-3">
             <div class="col-md-3">
                 <div class="card">
                     <div class="card-header">
-                        Members List
+                        <input type="search" class="form-control form-control-sm" id="search"
+                               placeholder="Search members…" oninput="renderMembersList()">
                     </div>
-                    <ul class="list-group list-group-flush" id="membersList" style="max-height: 70vh; overflow-y: auto;">
-                        <!-- Members will be loaded here -->
-                    </ul>
+                    <ul class="list-group list-group-flush" id="membersList"></ul>
                 </div>
             </div>
             <div class="col-md-9">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span>Family Tree Viewer (Double click a node to edit)</span>
+                    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                        <div class="legend small">
+                            <span><i class="line child"></i>Child of</span>
+                            <span><i class="swatch male"></i>Male</span>
+                            <span><i class="swatch female"></i>Female</span>
+                            <span><i class="line spouse"></i>Spouse</span>
+                            <span><i class="swatch deceased"></i>Meninggal Dunia</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="small text-muted d-none d-lg-inline">Click a person for details · double-click to edit</span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="fitTree()">Fit to screen</button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div id="treeNetwork"></div>
@@ -50,7 +60,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="memberForm">
+                    <div class="alert alert-danger py-2 d-none" id="formError"></div>
+                    <form id="memberForm" onsubmit="event.preventDefault(); saveMember();">
                         <input type="hidden" id="memberId">
                         <div class="mb-3">
                             <label class="form-label">Name</label>
@@ -72,7 +83,7 @@
                             </div>
                             <div class="col mb-3">
                                 <label class="form-label">Death Date</label>
-                                <input type="date" class="form-control" id="death_date">
+                                <input type="date" class="form-control" id="death_date" onchange="syncDeceased()">
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" id="is_deceased">
                                     <label class="form-check-label" for="is_deceased">Meninggal Dunia</label>
@@ -81,21 +92,16 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Father</label>
-                            <select class="form-select" id="father_id">
-                                <option value="">None</option>
-                            </select>
+                            <select class="form-select" id="father_id"></select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Mother</label>
-                            <select class="form-select" id="mother_id">
-                                <option value="">None</option>
-                            </select>
+                            <select class="form-select" id="mother_id"></select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Spouse</label>
-                            <select class="form-select" id="spouse_id">
-                                <option value="">None</option>
-                            </select>
+                            <select class="form-select" id="spouse_id"></select>
+                            <div class="form-text">Linked both ways: their spouse is set to this person too.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Notes</label>
@@ -112,7 +118,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/vendor/bootstrap.bundle.min.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
